@@ -1,7 +1,20 @@
 # Author: PB & Claude
 # Maintainer: PB
 # Original date: 2025.06.09
-# License: (c) HRDAG, 2025, GPL-2 or newer
+# Copyright (C) 2025 HRDAG https://hrdag.org
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 # ------
 # btrfs-diff/src/btrfs_diff/stream.py
@@ -9,6 +22,11 @@
 """Btrfs send stream parser.
 
 Adapted from btrfs-snapshots-diff by Jean-Denis Girard.
+Original work: https://github.com/sysnux/btrfs-snapshots-diff
+Copyright (c) 2016-2021 Jean-Denis Girard
+Original license: MIT License
+
+Adaptation licensed under GPL-2.0-or-later.
 """
 
 from collections import OrderedDict
