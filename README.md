@@ -305,6 +305,122 @@ Typical performance on modern hardware:
 - **Privileges**: `sudo` access for `btrfs send` commands
 - **Tools**: `fdfind` for validation (optional but recommended)
 
+## Integration Testing
+
+The project includes a comprehensive integration test suite that verifies btrfs-diff handles all file operation scenarios correctly. These tests are essential for ensuring reliability in production backup and sync systems.
+
+### Running the Tests
+
+Integration tests require a btrfs filesystem and sudo access:
+
+```bash
+# Run all integration tests
+pytest tests/integration/ --run-btrfs-tests --btrfs-path=/path/to/btrfs/filesystem
+
+# Run specific test categories
+pytest tests/integration/test_directory_operations.py --run-btrfs-tests --btrfs-path=/var/tmp
+pytest tests/integration/test_file_operations.py --run-btrfs-tests --btrfs-path=/var/tmp
+pytest tests/integration/test_edge_cases.py --run-btrfs-tests --btrfs-path=/var/tmp
+
+# Run with verbose output
+pytest tests/integration/ -v --run-btrfs-tests --btrfs-path=/var/tmp
+
+# Run a specific test
+pytest tests/integration/test_edge_cases.py::test_file_persistence -v --run-btrfs-tests --btrfs-path=/var/tmp
+```
+
+### Test Coverage
+
+The integration tests cover three main categories:
+
+#### Directory Operations (`test_directory_operations.py`)
+- Directory deletion (with files, empty, nested structures)
+- Directory renames
+- Directory to symlink replacement
+- Complex nested directory operations
+
+#### File Operations (`test_file_operations.py`)
+- File creation, modification, and deletion
+- File renames (within directory, across directories)
+- Symlink operations (creation, modification, deletion)
+- Permission changes
+- Hard link operations
+- Special characters in filenames
+- Empty file handling
+- File truncation and expansion
+
+#### Edge Cases (`test_edge_cases.py`)
+- **File persistence**: Verifies unchanged files are not reported
+- **Sparse files**: Files with holes
+- **Large files**: Multi-megabyte file operations
+- **Special files**: FIFOs and device files
+- **Extended attributes**: xattr modifications
+- **Path limits**: Very long paths and filenames
+- **Binary files**: Non-text file modifications
+- **Unicode edge cases**: Emoji, RTL text, combining characters
+- **Circular symlinks**: Self-referencing and circular chains
+- **Delete/recreate patterns**: Same name, different inode
+- **Concurrent modifications**: Multiple changes to same file
+- **Hardlink edge cases**: Complex hard link scenarios
+
+#### Complex Scenarios (`test_complex_scenarios.py`)
+- Rename chains (A→B→C→D)
+- File to directory replacement (and vice versa)
+- File swapping operations
+- Directory content migration
+- Deep directory restructuring
+- Mixed operations on same pathname
+- Symlink chain modifications
+- Case-sensitivity renames
+
+### Test Infrastructure
+
+The test suite includes a reusable fixture (`btrfs_snapshot_fixture.py`) that:
+- Creates temporary btrfs subvolumes for testing
+- Applies file operations between snapshots
+- Runs btrfs-diff and captures results
+- Automatically cleans up test data
+
+This fixture can be used by other projects needing to test btrfs snapshot operations:
+
+```python
+from tests.fixtures.btrfs_snapshot_fixture import create_btrfs_test_environment
+
+def test_my_scenario(btrfs_test_path):
+    def setup(work_dir):
+        # Create initial state
+        (work_dir / "test.txt").write_text("content")
+    
+    def modify(work_dir):
+        # Make changes
+        (work_dir / "test.txt").unlink()
+    
+    env = create_btrfs_test_environment(
+        btrfs_path=btrfs_test_path,
+        setup_func=setup,
+        modify_func=modify,
+        cleanup=True
+    )
+    
+    # Verify results
+    assert len(env.diff_output) == 1
+```
+
+### Requirements for Testing
+
+- Linux system with btrfs filesystem
+- Python 3.13+
+- pytest and test dependencies
+- sudo access (for btrfs subvolume operations)
+- At least 100MB free space on btrfs filesystem
+
+### Continuous Integration
+
+For CI environments without btrfs:
+- Tests marked with `@pytest.mark.btrfs_required` are automatically skipped
+- Use `--run-btrfs-tests` flag to explicitly enable when btrfs is available
+- Consider using a Docker container with btrfs support for CI testing
+
 ## Validation Accuracy
 
 Extensive testing shows high accuracy across operation types:
