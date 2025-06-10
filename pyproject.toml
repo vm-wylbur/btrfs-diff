@@ -7,7 +7,7 @@ name = "btrfs-diff"
 version = "0.1.0"
 description = "Parse and analyze differences between btrfs snapshots"
 authors = [
-    {name = "PB & Claude", email = "noreply@example.com"}
+    {name = "PB & Claude", email = "pball+github@hrdag.org"}
 ]
 license = {text = "GPL-2.0-or-later"}
 readme = "README.md"
