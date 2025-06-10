@@ -1,6 +1,7 @@
 # CLAUDE.md - development guidelines (local only)
 CLAUDE.md
 
+uv.lock
 # Python
 __pycache__/
 *.py[cod]
