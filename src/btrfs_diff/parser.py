@@ -68,6 +68,39 @@ class BtrfsParser:
         except (OSError, UnicodeError):
             # If we can't check, assume it's real to be safe
             return False
+    
+    def _detect_directory_type(self, path: str, action: str) -> bool | None:
+        """Detect if a path refers to a directory based on filesystem checks.
+        
+        Returns:
+            True if path is a directory
+            False if path is a file
+            None if cannot determine (e.g., for deleted paths)
+        """
+        try:
+            if action == 'deleted':
+                # For deleted items, check the old snapshot
+                snapshot_path = self.old_snapshot / path
+            else:
+                # For modified/renamed items, check the new snapshot
+                snapshot_path = self.new_snapshot / path
+            
+            if snapshot_path.exists():
+                return snapshot_path.is_dir()
+            else:
+                # Path doesn't exist, cannot determine
+                return None
+        except (OSError, UnicodeError):
+            # If we can't check, return None
+            return None
+    
+    def _augment_details_with_directory_info(self, details: dict, path: str, action: str) -> dict:
+        """Add is_directory field to details dictionary."""
+        augmented = details.copy()
+        is_dir = self._detect_directory_type(path, action)
+        if is_dir is not None:
+            augmented['is_directory'] = is_dir
+        return augmented
 
     def get_changes(self, debug: bool = False) -> list[dict]:
         """Get all file changes between snapshots as JSON-serializable list."""
@@ -297,7 +330,7 @@ class BtrfsParser:
                 changes.append({
                     'path': path,
                     'action': action,
-                    'details': cmd
+                    'details': self._augment_details_with_directory_info(cmd, path, action)
                 })
             else:
                 # Multiple actions - need to resolve net effect
@@ -322,12 +355,12 @@ class BtrfsParser:
                         changes.append({
                             'path': path,
                             'action': delete_cmd[0],
-                            'details': delete_cmd[1]
+                            'details': self._augment_details_with_directory_info(delete_cmd[1], path, delete_cmd[0])
                         })
                         changes.append({
                             'path': path,
                             'action': symlink_cmd[0],
-                            'details': symlink_cmd[1]
+                            'details': self._augment_details_with_directory_info(symlink_cmd[1], path, symlink_cmd[0])
                         })
                         if debug:
                             print(f"Resolved conflict for {path}: rmdir+symlink -> both reported")
@@ -344,7 +377,7 @@ class BtrfsParser:
                             changes.append({
                                 'path': path,
                                 'action': last_modify[0],
-                                'details': last_modify[1]
+                                'details': self._augment_details_with_directory_info(last_modify[1], path, last_modify[0])
                             })
                             if debug:
                                 print(f"Resolved conflict for {path}: delete+{last_modify[0]} -> {last_modify[0]}")
@@ -360,7 +393,7 @@ class BtrfsParser:
                         changes.append({
                             'path': path,
                             'action': rename_action[0],
-                            'details': rename_action[1]
+                            'details': self._augment_details_with_directory_info(rename_action[1], path, rename_action[0])
                         })
                         if debug:
                             print(f"Resolved conflict for {path}: rename+modify -> rename")
@@ -370,7 +403,7 @@ class BtrfsParser:
                     changes.append({
                         'path': path,
                         'action': last_action[0],
-                        'details': last_action[1]
+                        'details': self._augment_details_with_directory_info(last_action[1], path, last_action[0])
                     })
                     if debug:
                         print(f"Used last action for {path}: {last_action[0]}")

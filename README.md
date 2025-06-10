@@ -94,6 +94,76 @@ print(f"Actions: {dict(actions)}")
 print(f"Commands: {dict(commands)}")
 ```
 
+#### Directory Detection
+
+```python
+# Distinguish between files and directories using the is_directory field
+files = []
+directories = []
+
+for change in changes:
+    # The is_directory field reliably indicates directory vs file
+    if change['details'].get('is_directory') is True:
+        directories.append(change)
+    elif change['details'].get('is_directory') is False:
+        files.append(change)
+    # Note: is_directory may be None if detection failed
+
+print(f"Found {len(files)} file operations, {len(directories)} directory operations")
+
+# Example: Process files and directories differently (like backup tools)
+for change in changes:
+    is_directory = change['details'].get('is_directory', False)
+    path = change['path']
+    action = change['action']
+    
+    if action == 'modified':
+        if is_directory:
+            print(f"Directory created/modified: {path}")
+            # Handle directory creation (mkdir equivalent)
+        else:
+            print(f"File created/modified: {path}")
+            # Handle file copy/update
+    elif action == 'deleted':
+        if is_directory:
+            print(f"Directory deleted: {path}")
+            # Handle directory removal (rmdir equivalent)
+        else:
+            print(f"File deleted: {path}")
+            # Handle file deletion
+```
+
+#### External Tool Integration
+
+```python
+# Safe pattern for external tools (replaces broken command checking)
+def is_directory_operation(change):
+    """Safely detect directory operations for sync/backup tools."""
+    # NEW: Use is_directory field instead of command field
+    return change['details'].get('is_directory', False)
+
+# Example sync tool logic (fixes production bug)
+for change in changes:
+    source_path = old_snapshot / change['path']
+    target_path = backup_target / change['path']
+    
+    if change['action'] == 'modified':
+        if is_directory_operation(change):
+            # Create directory
+            target_path.mkdir(parents=True, exist_ok=True)
+        else:
+            # Copy file
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, target_path)
+    elif change['action'] == 'deleted':
+        if is_directory_operation(change):
+            # Remove directory
+            shutil.rmtree(target_path, ignore_errors=True)
+        else:
+            # Remove file
+            target_path.unlink(missing_ok=True)
+```
+
 #### Validation Framework
 
 ```python
@@ -184,7 +254,20 @@ The parser categorizes changes into three main actions:
     'action': 'modified',
     'details': {
         'command': 'update_extent',  # or 'mkfile', 'truncate'
-        'size': 1024
+        'size': 1024,
+        'is_directory': False  # NEW: Reliable directory detection
+    }
+}
+```
+
+### Modified Directories  
+```python
+{
+    'path': 'home/user/new_folder',
+    'action': 'modified',
+    'details': {
+        'command': 'mkdir',  # Directory creation (rare in output)
+        'is_directory': True  # NEW: Reliable directory detection
     }
 }
 ```
@@ -195,7 +278,20 @@ The parser categorizes changes into three main actions:
     'path': 'home/user/old_file.txt', 
     'action': 'deleted',
     'details': {
-        'command': 'unlink'  # or 'rmdir'
+        'command': 'unlink',
+        'is_directory': False  # NEW: File deletion
+    }
+}
+```
+
+### Deleted Directories
+```python
+{
+    'path': 'home/user/old_folder', 
+    'action': 'deleted',
+    'details': {
+        'command': 'rmdir',
+        'is_directory': True  # NEW: Directory deletion
     }
 }
 ```
@@ -207,7 +303,8 @@ The parser categorizes changes into three main actions:
     'action': 'renamed', 
     'details': {
         'command': 'rename',
-        'path_to': 'home/user/new_name.txt'
+        'path_to': 'home/user/new_name.txt',
+        'is_directory': False  # NEW: File vs directory distinction
     }
 }
 ```
@@ -220,7 +317,8 @@ The parser categorizes changes into three main actions:
     'details': {
         'command': 'symlink',
         'path_link': '../target/file',
-        'inode': 12345
+        'inode': 12345,
+        'is_directory': False  # NEW: Symlinks are not directories
     }
 }
 ```

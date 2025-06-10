@@ -39,6 +39,7 @@ class ChangeDetails:
     size: int | None = None
     inode: int | None = None
     file_offset: int | None = None
+    is_directory: bool | None = None
 
 
 @dataclass(frozen=True)
