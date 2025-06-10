@@ -86,12 +86,21 @@ class BtrfsParser:
         # Build rename chain map to resolve orphan paths
         rename_map = {}
         reverse_rename_map = {}  # To trace orphan paths back to original names
+        
         for cmd in commands:
             if cmd.get('command') == 'rename':
                 source = cmd['path']
                 dest = cmd['path_to']
                 rename_map[source] = dest
                 reverse_rename_map[dest] = source
+        
+        # Track which orphan paths get deleted (to avoid following their chains)
+        deleted_orphans = set()
+        for cmd in commands:
+            if cmd.get('command') in ['rmdir', 'unlink']:
+                path = cmd['path']
+                if self._is_orphan_path(path):
+                    deleted_orphans.add(path)
         
         if debug:
             print(f"Rename map entries: {len(rename_map)}")
@@ -107,7 +116,13 @@ class BtrfsParser:
             original = path
             while current in rename_map and current not in seen:
                 seen.add(current)
-                current = rename_map[current]
+                next_path = rename_map[current]
+                # Stop if the next path is a deleted orphan
+                if next_path in deleted_orphans:
+                    if debug:
+                        print(f"Stopped at deleted orphan: {next_path}")
+                    break
+                current = next_path
             if debug and original != current:
                 print(f"Resolved: {original} -> {current}")
             return current
@@ -253,6 +268,14 @@ class BtrfsParser:
                     continue
                     
                 if not self._is_orphan_path(path):  # Real source path
+                    # Check if this rename leads to a deleted orphan
+                    direct_dest = cmd.get('path_to', '')
+                    if direct_dest in deleted_orphans:
+                        # This is a rename-to-delete pattern, skip it
+                        if debug:
+                            print(f"Skipping rename to deleted orphan: {path} -> {direct_dest}")
+                        continue
+                    
                     final_dest = resolve_final_path(path)
                     if not self._is_orphan_path(final_dest):  # Real destination
                         # Update the details to show final destination
@@ -283,22 +306,48 @@ class BtrfsParser:
                 has_rename = any(action == 'renamed' for action, _, _ in actions)
                 
                 if has_delete and (has_modify or has_rename):
-                    # Delete followed by modify/rename = net effect is modified
-                    # Use the last modify/rename action
-                    last_modify = None
-                    for action, cmd, order in actions:
-                        if action in ['modified', 'renamed']:
-                            if last_modify is None or order > last_modify[2]:
-                                last_modify = (action, cmd, order)
+                    # Special case: directory replaced with symlink
+                    # Report both the deletion and the symlink creation
+                    delete_cmd = None
+                    symlink_cmd = None
                     
-                    if last_modify:
+                    for action, cmd, order in actions:
+                        if action == 'deleted' and cmd.get('command') == 'rmdir':
+                            delete_cmd = (action, cmd, order)
+                        elif action == 'modified' and cmd.get('command') == 'symlink':
+                            symlink_cmd = (action, cmd, order)
+                    
+                    if delete_cmd and symlink_cmd:
+                        # Report both directory deletion and symlink creation
                         changes.append({
                             'path': path,
-                            'action': last_modify[0],
-                            'details': last_modify[1]
+                            'action': delete_cmd[0],
+                            'details': delete_cmd[1]
+                        })
+                        changes.append({
+                            'path': path,
+                            'action': symlink_cmd[0],
+                            'details': symlink_cmd[1]
                         })
                         if debug:
-                            print(f"Resolved conflict for {path}: delete+{last_modify[0]} -> {last_modify[0]}")
+                            print(f"Resolved conflict for {path}: rmdir+symlink -> both reported")
+                    else:
+                        # Normal case: Delete followed by modify/rename = net effect is modified
+                        # Use the last modify/rename action
+                        last_modify = None
+                        for action, cmd, order in actions:
+                            if action in ['modified', 'renamed']:
+                                if last_modify is None or order > last_modify[2]:
+                                    last_modify = (action, cmd, order)
+                        
+                        if last_modify:
+                            changes.append({
+                                'path': path,
+                                'action': last_modify[0],
+                                'details': last_modify[1]
+                            })
+                            if debug:
+                                print(f"Resolved conflict for {path}: delete+{last_modify[0]} -> {last_modify[0]}")
                 elif has_rename and has_modify:
                     # Rename + modify = use rename (more structural change)
                     rename_action = None
