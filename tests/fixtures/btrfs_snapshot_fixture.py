@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 from btrfs_diff import BtrfsParser
-from btrfs_diff.types import FileChange
 
 
 @dataclass
@@ -36,7 +35,7 @@ class BtrfsTestEnvironment:
     before_snapshot: Path  # .../before/
     after_snapshot: Path  # .../after/
     working_dir: Path  # .../work/ (where changes are made)
-    diff_output: List[FileChange]  # Parsed diff results
+    diff_output: List[dict]  # Parsed diff results
     raw_diff: str  # Raw JSON output
 
 
@@ -121,9 +120,7 @@ def create_btrfs_test_environment(
         # Run btrfs-diff to get changes
         parser = BtrfsParser(str(before_snapshot), str(after_snapshot))
         diff_output = parser.get_changes()
-        raw_diff = json.dumps(
-            [change.to_dict() for change in diff_output], indent=2
-        )
+        raw_diff = json.dumps(diff_output, indent=2)
         
         return BtrfsTestEnvironment(
             test_root=test_root,

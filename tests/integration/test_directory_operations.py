@@ -59,19 +59,19 @@ def test_directory_deletion_with_files(btrfs_test_path):
         "Directory should not exist in after snapshot"
     
     # Extract deletions from diff output
-    deletions = [c for c in env.diff_output if c.action == "deleted"]
+    deletions = [c for c in env.diff_output if c['action'] == "deleted"]
     
     # Debug output
     print(f"\nTotal changes detected: {len(env.diff_output)}")
     print(f"Deletions detected: {len(deletions)}")
     for deletion in deletions:
-        print(f"  - {deletion.path} ({deletion.details.command})")
+        print(f"  - {deletion['path']} ({deletion['details']['command']})")
     
     # Show all changes for debugging
     if len(env.diff_output) > 0:
         print("\nAll changes detected:")
         for change in env.diff_output:
-            print(f"  - {change.action}: {change.path} ({change.details.command})")
+            print(f"  - {change['action']}: {change['path']} ({change['details']['command']})")
     
     # Verify we detect both the file and directory deletion
     assert len(deletions) >= 2, (
@@ -81,22 +81,22 @@ def test_directory_deletion_with_files(btrfs_test_path):
     
     # Check for file deletion
     file_deletion = next(
-        (d for d in deletions if d.path.endswith("file.txt")), None
+        (d for d in deletions if d['path'].endswith("file.txt")), None
     )
     assert file_deletion is not None, "File deletion not detected"
-    assert file_deletion.details.command == "unlink", (
+    assert file_deletion['details']['command'] == "unlink", (
         f"Expected 'unlink' command for file, got "
-        f"'{file_deletion.details.command}'"
+        f"'{file_deletion['details']['command']}'"
     )
     
     # Check for directory deletion
     dir_deletion = next(
-        (d for d in deletions if d.path.endswith("test_delete")), None
+        (d for d in deletions if d['path'].endswith("test_delete")), None
     )
     assert dir_deletion is not None, "Directory deletion not detected"
-    assert dir_deletion.details.command == "rmdir", (
+    assert dir_deletion['details']['command'] == "rmdir", (
         f"Expected 'rmdir' command for directory, got "
-        f"'{dir_deletion.details.command}'"
+        f"'{dir_deletion['details']['command']}'"
     )
 
 
@@ -121,13 +121,13 @@ def test_empty_directory_deletion(btrfs_test_path):
         cleanup=True,
     )
     
-    deletions = [c for c in env.diff_output if c.action == "deleted"]
+    deletions = [c for c in env.diff_output if c['action'] == "deleted"]
     
     assert len(deletions) == 1, (
         f"Expected 1 deletion for empty directory, found {len(deletions)}"
     )
-    assert deletions[0].path.endswith("empty_dir")
-    assert deletions[0].details.command == "rmdir"
+    assert deletions[0]['path'].endswith("empty_dir")
+    assert deletions[0]['details']['command'] == "rmdir"
 
 
 @pytest.mark.btrfs_required
@@ -156,7 +156,7 @@ def test_nested_directory_deletion(btrfs_test_path):
         cleanup=True,
     )
     
-    deletions = [c for c in env.diff_output if c.action == "deleted"]
+    deletions = [c for c in env.diff_output if c['action'] == "deleted"]
     
     # Should detect: 3 files + 3 directories
     assert len(deletions) >= 6, (
@@ -166,7 +166,7 @@ def test_nested_directory_deletion(btrfs_test_path):
     # Verify all files detected
     file_paths = ["file1.txt", "file2.txt", "file3.txt"]
     for filename in file_paths:
-        assert any(d.path.endswith(filename) for d in deletions), (
+        assert any(d['path'].endswith(filename) for d in deletions), (
             f"File {filename} deletion not detected"
         )
     
@@ -174,7 +174,7 @@ def test_nested_directory_deletion(btrfs_test_path):
     dir_paths = ["nested", "level1", "level2"]
     for dirname in dir_paths:
         assert any(
-            d.path.endswith(dirname) and d.details.command == "rmdir"
+            d['path'].endswith(dirname) and d['details']['command'] == "rmdir"
             for d in deletions
         ), f"Directory {dirname} deletion not detected"
 
@@ -202,17 +202,17 @@ def test_directory_rename(btrfs_test_path):
         cleanup=True,
     )
     
-    renames = [c for c in env.diff_output if c.action == "renamed"]
+    renames = [c for c in env.diff_output if c['action'] == "renamed"]
     
     assert len(renames) >= 1, "Directory rename not detected"
     
     dir_rename = next(
-        (r for r in renames if r.path.endswith("original_name")), None
+        (r for r in renames if r['path'].endswith("original_name")), None
     )
     assert dir_rename is not None
-    assert dir_rename.details.command == "rename"
-    assert hasattr(dir_rename.details, "path_to")
-    assert dir_rename.details.path_to.endswith("new_name")
+    assert dir_rename['details']['command'] == "rename"
+    assert "path_to" in dir_rename['details']
+    assert dir_rename['details']['path_to'].endswith("new_name")
 
 
 @pytest.mark.btrfs_required
@@ -248,15 +248,15 @@ def test_directory_to_symlink(btrfs_test_path):
     )
     
     # Should see deletions and a new symlink
-    deletions = [c for c in env.diff_output if c.action == "deleted"]
+    deletions = [c for c in env.diff_output if c['action'] == "deleted"]
     modifications = [
         c for c in env.diff_output 
-        if c.action == "modified" and c.details.command == "symlink"
+        if c['action'] == "modified" and c['details']['command'] == "symlink"
     ]
     
     # Verify directory and its contents were deleted
-    assert any(d.path.endswith("will_be_symlink") for d in deletions)
-    assert any(d.path.endswith("file.txt") for d in deletions)
+    assert any(d['path'].endswith("will_be_symlink") for d in deletions)
+    assert any(d['path'].endswith("file.txt") for d in deletions)
     
     # Verify symlink creation
     assert len(modifications) >= 1, "Symlink creation not detected"

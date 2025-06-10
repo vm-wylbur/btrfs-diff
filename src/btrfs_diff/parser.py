@@ -85,11 +85,13 @@ class BtrfsParser:
         
         # Build rename chain map to resolve orphan paths
         rename_map = {}
+        reverse_rename_map = {}  # To trace orphan paths back to original names
         for cmd in commands:
             if cmd.get('command') == 'rename':
                 source = cmd['path']
                 dest = cmd['path_to']
                 rename_map[source] = dest
+                reverse_rename_map[dest] = source
         
         if debug:
             print(f"Rename map entries: {len(rename_map)}")
@@ -109,6 +111,31 @@ class BtrfsParser:
             if debug and original != current:
                 print(f"Resolved: {original} -> {current}")
             return current
+        
+        # Trace back from orphan path to original path
+        def trace_original_path(orphan_path: str) -> str:
+            """Trace an orphan path back to its original non-orphan name."""
+            # Try direct lookup first  
+            if orphan_path in reverse_rename_map:
+                traced = reverse_rename_map[orphan_path]
+                # If the traced path still contains orphans, recursively trace it
+                if self._is_orphan_path(traced) or '/' in traced and any(
+                    self._is_orphan_path(p) for p in traced.split('/')
+                ):
+                    return trace_original_path(traced)
+                return traced
+            
+            # Handle paths with orphan components like "o257-106840-0/file.txt"
+            parts = orphan_path.split('/')
+            if len(parts) > 1 and self._is_orphan_path(parts[0]):
+                # Trace the base orphan
+                traced_base = trace_original_path(parts[0])
+                if traced_base != parts[0]:
+                    # Reconstruct with traced base
+                    remaining = '/'.join(parts[1:])
+                    return f"{traced_base}/{remaining}"
+            
+            return orphan_path  # Return as-is if can't trace back
         
         # Pre-analysis: identify truly deleted vs delete+recreate patterns
         unlinked_files = set()
@@ -191,17 +218,33 @@ class BtrfsParser:
             
             # Deleted files and directories  
             elif cmd_type in ['unlink', 'rmdir']:
-                # Skip orphan paths for deletions
+                # For orphan paths, try to trace back to original path
+                actual_path = path
                 if self._is_orphan_path(path):
-                    continue
+                    original = trace_original_path(path)
+                    if original != path:
+                        # This orphan was renamed from a real path
+                        actual_path = original
+                        if debug:
+                            print(f"Traced orphan deletion: {path} -> {original}")
+                    else:
+                        # Pure orphan path with no traceable origin, skip
+                        continue
+                
                 # Skip phantom deletions (files that never existed in old snapshot)
-                if self._is_phantom_deletion(path):
+                if self._is_phantom_deletion(actual_path):
                     if debug:
-                        print(f"Skipping phantom deletion: {path}")
+                        print(f"Skipping phantom deletion: {actual_path}")
                     continue
-                if path not in path_actions:
-                    path_actions[path] = []
-                path_actions[path].append(('deleted', cmd, order))
+                
+                # Record the deletion using the original path
+                if actual_path not in path_actions:
+                    path_actions[actual_path] = []
+                
+                # Update the command to use the original path
+                updated_cmd = cmd.copy()
+                updated_cmd['path'] = actual_path
+                path_actions[actual_path].append(('deleted', updated_cmd, order))
             
             # Renamed files - only track non-orphan sources with non-orphan finals
             elif cmd_type == 'rename':
