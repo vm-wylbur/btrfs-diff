@@ -435,9 +435,6 @@ pytest tests/integration/test_directory_operations.py --run-btrfs-tests --btrfs-
 pytest tests/integration/test_file_operations.py --run-btrfs-tests --btrfs-path=/var/tmp
 pytest tests/integration/test_edge_cases.py --run-btrfs-tests --btrfs-path=/var/tmp
 
-# Run aspirational tests (documents future functionality - currently failing)
-pytest tests/ --run-btrfs-tests --btrfs-path=/var/tmp --run-aspirational-tests
-
 # Run with verbose output
 pytest tests/ -v --run-btrfs-tests --btrfs-path=/var/tmp
 
@@ -447,28 +444,18 @@ pytest tests/integration/test_edge_cases.py::test_file_persistence -v --run-btrf
 
 ### Test Categories
 
-The test suite is organized into two main categories:
-
-#### Production Tests (Default)
-These tests validate current functionality and must pass for releases:
+The test suite validates comprehensive functionality including:
 - **Core functionality**: File/directory detection, parsing accuracy
 - **Directory operations**: Creation, deletion, nesting, symlink replacement
 - **File operations**: Creation, modification, deletion, symlinks  
 - **Edge cases**: Sparse files, special files, Unicode, permissions
+- **Complex scenarios**: 
+  - Circular rename chains (A→B→C→A)
+  - File swapping operations
+  - Directory content migration
+  - Deep directory restructuring
+  - Case-sensitivity filename changes
 - **Directory detection**: Production bug fixes and API reliability
-
-#### Aspirational Tests (`--run-aspirational-tests`)
-These tests document desired future functionality (currently failing):
-- **Complex rename chains**: Multi-step A→B→C→D scenarios
-- **File swapping**: Circular rename operations
-- **Directory restructuring**: Deep hierarchy reorganization  
-- **Cross-directory moves**: Content migration between directories
-- **Case-sensitivity renames**: Case-only filename changes
-
-Use aspirational tests to:
-- **Document enhancement goals** for future development
-- **Validate improvements** when implementing advanced rename detection
-- **Ensure comprehensive coverage** of complex filesystem scenarios
 
 ### Test Coverage
 
