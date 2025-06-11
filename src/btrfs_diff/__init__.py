@@ -29,7 +29,7 @@ from .validator import (
 )
 from .types import FileChange, ChangeDetails, ValidationResult
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "BtrfsParser",
