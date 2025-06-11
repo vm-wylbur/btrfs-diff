@@ -49,29 +49,34 @@ btrfs-diff comprehensive /mnt/snapshots --pattern "data.2024*" --sample 1000
 #### Basic Change Detection
 
 ```python
-from btrfs_diff import BtrfsParser
+from btrfs_diff import BtrfsParser, FileChange
 
 # Create parser for two snapshots
 parser = BtrfsParser("/path/to/old/snapshot", "/path/to/new/snapshot")
 
-# Get all changes
-changes = parser.get_changes()
+# Get all changes (new in v0.2.0 - returns typed objects)
+changes: list[FileChange] = parser.get_changes()
 
 for change in changes:
-    print(f"{change['action']}: {change['path']}")
-    if change['action'] == 'renamed':
-        print(f"  → {change['details']['path_to']}")
-    elif change['action'] == 'modified' and change['details']['command'] == 'symlink':
-        print(f"  → {change['details']['path_link']}")
+    print(f"{change.action}: {change.path}")
+    if change.action == 'renamed':
+        print(f"  → {change.details.path_to}")
+    elif change.action == 'modified' and change.details.command == 'symlink':
+        print(f"  → {change.details.path_link}")
 ```
 
-#### JSON Output
+#### JSON Output (Dict-based API)
 
 ```python
-from btrfs_diff import get_btrfs_diff
+from btrfs_diff import BtrfsParser
 import json
 
-# Get changes as JSON string
+# For backward compatibility, use get_changes_dict()
+parser = BtrfsParser("/path/to/old/snapshot", "/path/to/new/snapshot")
+changes_dict = parser.get_changes_dict()  # Returns list[dict]
+
+# Or use the convenience function
+from btrfs_diff import get_btrfs_diff
 result = get_btrfs_diff("/path/to/old/snapshot", "/path/to/new/snapshot")
 changes = json.loads(result)
 
@@ -85,13 +90,22 @@ renames = [c for c in changes if c['action'] == 'renamed']
 
 ```python
 from collections import Counter
+from btrfs_diff import BtrfsParser, ActionType
 
-# Analyze change patterns
-actions = Counter(c['action'] for c in changes)
-commands = Counter(c['details']['command'] for c in changes)
+# Using the typed API (v0.2.0+)
+parser = BtrfsParser("/path/to/old/snapshot", "/path/to/new/snapshot")
+changes = parser.get_changes()
+
+# Analyze change patterns with type safety
+actions = Counter(c.action for c in changes)
+commands = Counter(c.details.command for c in changes if c.details.command)
 
 print(f"Actions: {dict(actions)}")
 print(f"Commands: {dict(commands)}")
+
+# Type-safe filtering
+modified_files = [c for c in changes if c.action == ActionType.MODIFIED]
+symlinks = [c for c in changes if c.details.command == 'symlink']
 ```
 
 #### Directory Detection
@@ -101,11 +115,12 @@ print(f"Commands: {dict(commands)}")
 files = []
 directories = []
 
+# Using typed API (v0.2.0+)
 for change in changes:
     # The is_directory field reliably indicates directory vs file
-    if change['details'].get('is_directory') is True:
+    if change.details.is_directory is True:
         directories.append(change)
-    elif change['details'].get('is_directory') is False:
+    elif change.details.is_directory is False:
         files.append(change)
     # Note: is_directory may be None if detection failed
 
@@ -113,9 +128,9 @@ print(f"Found {len(files)} file operations, {len(directories)} directory operati
 
 # Example: Process files and directories differently (like backup tools)
 for change in changes:
-    is_directory = change['details'].get('is_directory', False)
-    path = change['path']
-    action = change['action']
+    is_directory = change.details.is_directory or False
+    path = change.path
+    action = change.action
     
     if action == 'modified':
         if is_directory:
@@ -136,18 +151,18 @@ for change in changes:
 #### External Tool Integration
 
 ```python
-# Safe pattern for external tools (replaces broken command checking)
-def is_directory_operation(change):
+# Safe pattern for external tools using typed API (v0.2.0+)
+def is_directory_operation(change: FileChange) -> bool:
     """Safely detect directory operations for sync/backup tools."""
-    # NEW: Use is_directory field instead of command field
-    return change['details'].get('is_directory', False)
+    # Use is_directory field for reliable detection
+    return change.details.is_directory or False
 
-# Example sync tool logic (fixes production bug)
+# Example sync tool logic
 for change in changes:
-    source_path = old_snapshot / change['path']
-    target_path = backup_target / change['path']
+    source_path = old_snapshot / change.path
+    target_path = backup_target / change.path
     
-    if change['action'] == 'modified':
+    if change.action == 'modified':
         if is_directory_operation(change):
             # Create directory
             target_path.mkdir(parents=True, exist_ok=True)
@@ -155,7 +170,7 @@ for change in changes:
             # Copy file
             target_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_path, target_path)
-    elif change['action'] == 'deleted':
+    elif change.action == 'deleted':
         if is_directory_operation(change):
             # Remove directory
             shutil.rmtree(target_path, ignore_errors=True)
@@ -562,22 +577,56 @@ Extensive testing shows high accuracy across operation types:
 
 GPL-2.0-or-later. See [LICENSE](LICENSE) for full text.
 
-## TODO
+## Migration Guide
 
-### Version 0.2.0 - Breaking API Changes
+### Upgrading from v0.1.x to v0.2.0
 
-The following breaking changes are planned for version 0.2.0 to provide a fully typed API:
+Version 0.2.0 introduces a typed API while maintaining backward compatibility. The main change is that `get_changes()` now returns typed `FileChange` objects instead of dictionaries.
 
-- **Typed return values**: `get_changes()` will return `list[FileChange]` instead of `list[dict]`
-- **Typed parameters**: All API methods will require/return typed objects instead of dicts
-- **Migration path**: Current dict-based API will be deprecated but available via `get_changes_dict()` 
-- **Enhanced type safety**: Full type hints and runtime validation for all operations
-- **Improved IDE support**: Better autocomplete and error detection in development environments
+#### What Changed
 
-**Migration timeline:**
-- Current version (0.1.x): Dict API with typed internals (backward compatible)
-- Version 0.2.0: Typed API with optional dict compatibility layer
-- Version 0.3.0+: Fully typed API (dict methods deprecated/removed)
+- `parser.get_changes()` now returns `list[FileChange]` instead of `list[dict]`
+- The dict-based API moved to `parser.get_changes_dict()` for backward compatibility
+- New type imports available: `FileChange`, `ChangeDetails`, `ActionType`
+
+#### Migration Examples
+
+**Old code (v0.1.x):**
+```python
+changes = parser.get_changes()
+for change in changes:
+    if change['action'] == 'modified':
+        print(change['path'])
+```
+
+**New code (v0.2.0) - Option 1: Use typed API (recommended):**
+```python
+changes = parser.get_changes()  # Now returns FileChange objects
+for change in changes:
+    if change.action == 'modified':  # Use dot notation
+        print(change.path)
+```
+
+**New code (v0.2.0) - Option 2: Keep using dicts (backward compatible):**
+```python
+changes = parser.get_changes_dict()  # Explicitly use dict API
+for change in changes:
+    if change['action'] == 'modified':  # Same as before
+        print(change['path'])
+```
+
+#### Benefits of the Typed API
+
+- **Type safety**: IDEs can catch errors before runtime
+- **Autocomplete**: Better developer experience with attribute suggestions
+- **Documentation**: Types serve as inline documentation
+- **Future-proof**: Aligns with modern Python best practices
+
+#### Deprecation Timeline
+
+- **v0.2.0**: Both APIs available, typed API is default
+- **v0.3.0**: Dict API will be deprecated with warnings
+- **v0.4.0**: Dict API may be removed
 
 ## Attribution
 
