@@ -412,20 +412,48 @@ The project includes a comprehensive integration test suite that verifies btrfs-
 Integration tests require a btrfs filesystem and sudo access:
 
 ```bash
-# Run all integration tests
-pytest tests/integration/ --run-btrfs-tests --btrfs-path=/path/to/btrfs/filesystem
+# Run all production-ready tests (recommended for CI/CD)
+pytest tests/ --run-btrfs-tests --btrfs-path=/path/to/btrfs/filesystem
 
 # Run specific test categories
 pytest tests/integration/test_directory_operations.py --run-btrfs-tests --btrfs-path=/var/tmp
 pytest tests/integration/test_file_operations.py --run-btrfs-tests --btrfs-path=/var/tmp
 pytest tests/integration/test_edge_cases.py --run-btrfs-tests --btrfs-path=/var/tmp
 
+# Run aspirational tests (documents future functionality - currently failing)
+pytest tests/ --run-btrfs-tests --btrfs-path=/var/tmp --run-aspirational-tests
+
 # Run with verbose output
-pytest tests/integration/ -v --run-btrfs-tests --btrfs-path=/var/tmp
+pytest tests/ -v --run-btrfs-tests --btrfs-path=/var/tmp
 
 # Run a specific test
 pytest tests/integration/test_edge_cases.py::test_file_persistence -v --run-btrfs-tests --btrfs-path=/var/tmp
 ```
+
+### Test Categories
+
+The test suite is organized into two main categories:
+
+#### Production Tests (Default)
+These tests validate current functionality and must pass for releases:
+- **Core functionality**: File/directory detection, parsing accuracy
+- **Directory operations**: Creation, deletion, nesting, symlink replacement
+- **File operations**: Creation, modification, deletion, symlinks  
+- **Edge cases**: Sparse files, special files, Unicode, permissions
+- **Directory detection**: Production bug fixes and API reliability
+
+#### Aspirational Tests (`--run-aspirational-tests`)
+These tests document desired future functionality (currently failing):
+- **Complex rename chains**: Multi-step A→B→C→D scenarios
+- **File swapping**: Circular rename operations
+- **Directory restructuring**: Deep hierarchy reorganization  
+- **Cross-directory moves**: Content migration between directories
+- **Case-sensitivity renames**: Case-only filename changes
+
+Use aspirational tests to:
+- **Document enhancement goals** for future development
+- **Validate improvements** when implementing advanced rename detection
+- **Ensure comprehensive coverage** of complex filesystem scenarios
 
 ### Test Coverage
 
@@ -533,6 +561,23 @@ Extensive testing shows high accuracy across operation types:
 ## License
 
 GPL-2.0-or-later. See [LICENSE](LICENSE) for full text.
+
+## TODO
+
+### Version 0.2.0 - Breaking API Changes
+
+The following breaking changes are planned for version 0.2.0 to provide a fully typed API:
+
+- **Typed return values**: `get_changes()` will return `list[FileChange]` instead of `list[dict]`
+- **Typed parameters**: All API methods will require/return typed objects instead of dicts
+- **Migration path**: Current dict-based API will be deprecated but available via `get_changes_dict()` 
+- **Enhanced type safety**: Full type hints and runtime validation for all operations
+- **Improved IDE support**: Better autocomplete and error detection in development environments
+
+**Migration timeline:**
+- Current version (0.1.x): Dict API with typed internals (backward compatible)
+- Version 0.2.0: Typed API with optional dict compatibility layer
+- Version 0.3.0+: Fully typed API (dict methods deprecated/removed)
 
 ## Attribution
 

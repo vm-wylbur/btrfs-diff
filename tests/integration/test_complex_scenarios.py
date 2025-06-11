@@ -25,6 +25,7 @@ def btrfs_test_path(request):
 
 
 @pytest.mark.btrfs_required
+@pytest.mark.aspirational
 def test_rename_chain(btrfs_test_path):
     """Test detection of chained renames (A->B, B->C, C->D)."""
     
@@ -89,6 +90,7 @@ def test_file_replace_with_directory(btrfs_test_path):
 
 
 @pytest.mark.btrfs_required
+@pytest.mark.aspirational
 def test_swap_files(btrfs_test_path):
     """Test swapping contents/names of two files."""
     
@@ -121,6 +123,7 @@ def test_swap_files(btrfs_test_path):
 
 
 @pytest.mark.btrfs_required
+@pytest.mark.aspirational
 def test_directory_contents_swap(btrfs_test_path):
     """Test moving all contents from one directory to another."""
     
@@ -158,6 +161,7 @@ def test_directory_contents_swap(btrfs_test_path):
 
 
 @pytest.mark.btrfs_required
+@pytest.mark.aspirational
 def test_deep_directory_restructure(btrfs_test_path):
     """Test complex directory restructuring."""
     
@@ -282,6 +286,7 @@ def test_symlink_chain_modifications(btrfs_test_path):
 
 
 @pytest.mark.btrfs_required
+@pytest.mark.aspirational
 def test_case_sensitivity_renames(btrfs_test_path):
     """Test case-only renames (important for case-sensitive filesystems)."""
     

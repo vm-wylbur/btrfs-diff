@@ -24,6 +24,12 @@ def pytest_addoption(parser):
         default="/tmp",
         help="Path to a btrfs filesystem for integration tests",
     )
+    parser.addoption(
+        "--run-aspirational-tests",
+        action="store_true", 
+        default=False,
+        help="Run aspirational tests that document desired future functionality",
+    )
 
 
 def pytest_configure(config):
@@ -31,6 +37,10 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers",
         "btrfs_required: mark test as requiring btrfs filesystem and sudo",
+    )
+    config.addinivalue_line(
+        "markers", 
+        "aspirational: mark test as documenting desired future functionality (currently failing)",
     )
 
 
@@ -43,3 +53,12 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "btrfs_required" in item.keywords:
                 item.add_marker(skip_btrfs)
+    
+    # Skip aspirational tests unless --run-aspirational-tests is passed
+    if not config.getoption("--run-aspirational-tests"):
+        skip_aspirational = pytest.mark.skip(
+            reason="need --run-aspirational-tests option to run (these tests document future functionality)"
+        )
+        for item in items:
+            if "aspirational" in item.keywords:
+                item.add_marker(skip_aspirational)

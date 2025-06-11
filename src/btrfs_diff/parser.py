@@ -27,7 +27,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 from .stream import BtrfsStream
-from .types import FileChange, ChangeDetails
+from .types import FileChange, ChangeDetails, ActionType
 
 
 class BtrfsParser:
@@ -101,9 +101,57 @@ class BtrfsParser:
         if is_dir is not None:
             augmented['is_directory'] = is_dir
         return augmented
+    
+    def _dict_to_change_details(self, details_dict: dict) -> ChangeDetails:
+        """Convert dict to typed ChangeDetails object."""
+        return ChangeDetails(
+            command=details_dict.get('command', ''),
+            path=details_dict.get('path', ''),
+            path_to=details_dict.get('path_to'),
+            path_link=details_dict.get('path_link'),
+            size=details_dict.get('size'),
+            inode=details_dict.get('inode'),
+            file_offset=details_dict.get('file_offset'),
+            is_directory=details_dict.get('is_directory')
+        )
+    
+    def _create_file_change(self, path: str, action: ActionType, details_dict: dict) -> FileChange:
+        """Create typed FileChange from path, action, and details dict."""
+        # Augment with directory info first
+        augmented_details = self._augment_details_with_directory_info(details_dict, path, action)
+        # Convert to typed object
+        details = self._dict_to_change_details(augmented_details)
+        return FileChange(path=path, action=action, details=details)
+    
+    def _file_change_to_dict(self, change: FileChange) -> dict:
+        """Convert typed FileChange to dict for API compatibility."""
+        details = {}
+        # Only include non-None values to match original dict behavior
+        if change.details.command:
+            details['command'] = change.details.command
+        if change.details.path:
+            details['path'] = change.details.path
+        if change.details.path_to is not None:
+            details['path_to'] = change.details.path_to
+        if change.details.path_link is not None:
+            details['path_link'] = change.details.path_link
+        if change.details.size is not None:
+            details['size'] = change.details.size
+        if change.details.inode is not None:
+            details['inode'] = change.details.inode
+        if change.details.file_offset is not None:
+            details['file_offset'] = change.details.file_offset
+        if change.details.is_directory is not None:
+            details['is_directory'] = change.details.is_directory
+        
+        return {
+            'path': change.path,
+            'action': change.action,
+            'details': details
+        }
 
-    def get_changes(self, debug: bool = False) -> list[dict]:
-        """Get all file changes between snapshots as JSON-serializable list."""
+    def _get_changes_typed(self, debug: bool = False) -> list[FileChange]:
+        """Get all file changes between snapshots as typed objects (internal)."""
         send_stream = self._run_btrfs_send()
         stream = BtrfsStream(send_stream)
         commands, paths = stream.decode()
@@ -319,7 +367,7 @@ class BtrfsParser:
                         path_actions[path].append(('renamed', updated_cmd, order))
         
         # Second pass: resolve conflicts for each path
-        changes = []
+        changes: list[FileChange] = []
         for path, actions in path_actions.items():
             if not actions:
                 # Skip paths with no valid actions (all were filtered out)
@@ -327,11 +375,7 @@ class BtrfsParser:
             elif len(actions) == 1:
                 # Simple case - only one action
                 action, cmd, _ = actions[0]
-                changes.append({
-                    'path': path,
-                    'action': action,
-                    'details': self._augment_details_with_directory_info(cmd, path, action)
-                })
+                changes.append(self._create_file_change(path, action, cmd))
             else:
                 # Multiple actions - need to resolve net effect
                 has_delete = any(action == 'deleted' for action, _, _ in actions)
@@ -352,16 +396,8 @@ class BtrfsParser:
                     
                     if delete_cmd and symlink_cmd:
                         # Report both directory deletion and symlink creation
-                        changes.append({
-                            'path': path,
-                            'action': delete_cmd[0],
-                            'details': self._augment_details_with_directory_info(delete_cmd[1], path, delete_cmd[0])
-                        })
-                        changes.append({
-                            'path': path,
-                            'action': symlink_cmd[0],
-                            'details': self._augment_details_with_directory_info(symlink_cmd[1], path, symlink_cmd[0])
-                        })
+                        changes.append(self._create_file_change(path, delete_cmd[0], delete_cmd[1]))
+                        changes.append(self._create_file_change(path, symlink_cmd[0], symlink_cmd[1]))
                         if debug:
                             print(f"Resolved conflict for {path}: rmdir+symlink -> both reported")
                     else:
@@ -374,11 +410,7 @@ class BtrfsParser:
                                     last_modify = (action, cmd, order)
                         
                         if last_modify:
-                            changes.append({
-                                'path': path,
-                                'action': last_modify[0],
-                                'details': self._augment_details_with_directory_info(last_modify[1], path, last_modify[0])
-                            })
+                            changes.append(self._create_file_change(path, last_modify[0], last_modify[1]))
                             if debug:
                                 print(f"Resolved conflict for {path}: delete+{last_modify[0]} -> {last_modify[0]}")
                 elif has_rename and has_modify:
@@ -390,25 +422,22 @@ class BtrfsParser:
                             break
                     
                     if rename_action:
-                        changes.append({
-                            'path': path,
-                            'action': rename_action[0],
-                            'details': self._augment_details_with_directory_info(rename_action[1], path, rename_action[0])
-                        })
+                        changes.append(self._create_file_change(path, rename_action[0], rename_action[1]))
                         if debug:
                             print(f"Resolved conflict for {path}: rename+modify -> rename")
                 else:
                     # Use the last action in chronological order
                     last_action = max(actions, key=lambda x: x[2])
-                    changes.append({
-                        'path': path,
-                        'action': last_action[0],
-                        'details': self._augment_details_with_directory_info(last_action[1], path, last_action[0])
-                    })
+                    changes.append(self._create_file_change(path, last_action[0], last_action[1]))
                     if debug:
                         print(f"Used last action for {path}: {last_action[0]}")
         
-        return sorted(changes, key=lambda c: (c['action'], c['path']))
+        return sorted(changes, key=lambda c: (c.action, c.path))
+    
+    def get_changes(self, debug: bool = False) -> list[dict]:
+        """Get all file changes between snapshots as JSON-serializable list."""
+        typed_changes = self._get_changes_typed(debug)
+        return [self._file_change_to_dict(change) for change in typed_changes]
 
 
 def get_btrfs_diff(old_snapshot: Path | str, 
