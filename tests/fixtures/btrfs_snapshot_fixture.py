@@ -119,7 +119,7 @@ def create_btrfs_test_environment(
         
         # Run btrfs-diff to get changes
         parser = BtrfsParser(str(before_snapshot), str(after_snapshot))
-        diff_output = parser.get_changes()
+        diff_output = parser.get_changes_dict()
         raw_diff = json.dumps(diff_output, indent=2)
         
         return BtrfsTestEnvironment(

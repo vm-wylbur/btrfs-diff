@@ -58,7 +58,7 @@ def diff(
             console.print(f"  New: {new_snapshot}")
         
         parser = BtrfsParser(old_snapshot, new_snapshot)
-        changes = parser.get_changes(debug=debug)
+        changes = parser.get_changes_dict(debug=debug)
         
         if output_format == "json":
             print(json.dumps(changes, indent=2))

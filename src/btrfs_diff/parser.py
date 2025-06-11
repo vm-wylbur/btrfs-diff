@@ -150,8 +150,8 @@ class BtrfsParser:
             'details': details
         }
 
-    def _get_changes_typed(self, debug: bool = False) -> list[FileChange]:
-        """Get all file changes between snapshots as typed objects (internal)."""
+    def get_changes(self, debug: bool = False) -> list[FileChange]:
+        """Get all file changes between snapshots as typed objects."""
         send_stream = self._run_btrfs_send()
         stream = BtrfsStream(send_stream)
         commands, paths = stream.decode()
@@ -434,9 +434,13 @@ class BtrfsParser:
         
         return sorted(changes, key=lambda c: (c.action, c.path))
     
-    def get_changes(self, debug: bool = False) -> list[dict]:
-        """Get all file changes between snapshots as JSON-serializable list."""
-        typed_changes = self._get_changes_typed(debug)
+    def get_changes_dict(self, debug: bool = False) -> list[dict]:
+        """Get all file changes between snapshots as JSON-serializable list.
+        
+        Deprecated: Use get_changes() for typed objects instead.
+        This method is maintained for backward compatibility.
+        """
+        typed_changes = self.get_changes(debug)
         return [self._file_change_to_dict(change) for change in typed_changes]
     
 
@@ -445,5 +449,5 @@ def get_btrfs_diff(old_snapshot: Path | str,
                   new_snapshot: Path | str, debug: bool = False) -> str:
     """Get btrfs differences between two snapshots as JSON string."""
     parser = BtrfsParser(Path(old_snapshot), Path(new_snapshot))
-    changes = parser.get_changes(debug=debug)
+    changes = parser.get_changes_dict(debug=debug)
     return json.dumps(changes, indent=2)

@@ -27,7 +27,7 @@ from .validator import (
     validate_modifications, 
     validate_symlinks_targeted
 )
-from .types import FileChange, ChangeDetails, ValidationResult
+from .types import FileChange, ChangeDetails, ValidationResult, ActionType
 
 __version__ = "0.1.1"
 
@@ -40,4 +40,5 @@ __all__ = [
     "FileChange",
     "ChangeDetails", 
     "ValidationResult",
+    "ActionType",
 ]
