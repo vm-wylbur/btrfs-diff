@@ -438,6 +438,7 @@ class BtrfsParser:
         """Get all file changes between snapshots as JSON-serializable list."""
         typed_changes = self._get_changes_typed(debug)
         return [self._file_change_to_dict(change) for change in typed_changes]
+    
 
 
 def get_btrfs_diff(old_snapshot: Path | str, 

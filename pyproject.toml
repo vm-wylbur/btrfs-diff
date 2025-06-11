@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "btrfs-diff"
-version = "0.1.1"
+version = "0.1.2"
 description = "Parse and analyze differences between btrfs snapshots"
 authors = [
     {name = "PB & Claude", email = "pball+github@hrdag.org"}
